@@ -1,0 +1,56 @@
+from flask import Flask, render_template, request
+import sqlite3
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+
+def convert_timestamp(timestamp):
+    # Convert the timestamp to a compatible format for SQLite
+    dt = datetime.strptime(timestamp, '%d/%b/%Y:%H:%M:%S:+%f')
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+def get_filtered_results(from_date_obj, to_date_obj):
+    conn = sqlite3.connect('vedas.db')
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM threat")
+    rows = cursor.fetchall()
+
+    results = []
+    for row in rows:
+        timestamp_str = row[0]
+        timestamp = convert_timestamp(timestamp_str)
+        timestamp_obj = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S').date()
+        if from_date_obj <= timestamp_obj <= to_date_obj:
+            results.append(row)
+
+    cursor.close()
+    conn.close()
+
+    return results
+
+@app.route('/', methods=['GET', 'POST'])
+def search():
+    if request.method == 'POST':
+        from_date = request.form['from_date']
+        to_date = request.form['to_date']
+
+        from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+        to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+
+        print(f"From Date: {from_date_obj}")
+        print(f"To Date: {to_date_obj}")
+
+        results = get_filtered_results(from_date_obj, to_date_obj)
+
+        print(f"Results: {results}")
+
+        return render_template('search.html', results=results)
+
+    # For GET requests, retrieve all results without filtering
+    results = get_filtered_results(datetime.min.date(), datetime.max.date())
+
+    return render_template('search.html', results=results)
+
+if __name__ == '__main__':
+    app.run(debug=True)
